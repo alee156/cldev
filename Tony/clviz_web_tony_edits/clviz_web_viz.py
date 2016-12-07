@@ -39,12 +39,6 @@ def imgGet(inToken):
     maximum = np.argmax(counts)
 
     tupleResolution = inImg.GetSpacing();         # spacing here used to scale images to mm size (anisotropic resolution)
-    # EG: for Aut1367, the spacing is (0.01872, 0.01872, 0.005).
-    xResolution = tupleResolution[0]
-    yResolution = tupleResolution[1]
-    zResolution = tupleResolution[2]
-    # Now, to get the mm image size, we can multiply all x, y, z 
-    # to get the proper mm size when plotting.
 
     lowerThreshold = maximum
     upperThreshold = sitk.GetArrayFromImage(inImg).max()+1
@@ -134,13 +128,13 @@ def image_parse(inToken):
     
     return imgName
 
-def density_graph(Token):
+def density_graph(Token, tupleResolution):
     densg = dg.densitygraph(Token)
     print 'densitygraph module'
     densg.generate_density_graph()
     print 'generated density graph'
     g = nx.read_graphml(Token + '/' + Token + '.graphml')
-    ggraph = densg.get_brain_figure(g = g, plot_title=Token)
+    ggraph = densg.get_brain_figure(g = g, plot_title=Token, resolution=tupleResolution)
     plotly.offline.plot(ggraph, filename = Token + '/' + Token + '_brain_figure.html')
     hm = densg.generate_heat_map()
     plotly.offline.plot(hm, filename = Token + '/' + Token + '_brain_heatmap.html')
@@ -176,7 +170,7 @@ def atlas_region(Token):
     newToken = Token + '.region'
     atlas = arg.atlasregiongraph(newToken, Token)
     
-    atlas.generate_atlas_region_graph(None, numRegions)
+    atlas.generate_atlas_region_graph(None, numRegions, resolution)
 
 
 class FileDemo(object):

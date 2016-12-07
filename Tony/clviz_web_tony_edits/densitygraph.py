@@ -118,11 +118,11 @@ class densitygraph(object):
                 [0.1, 'rgb(204, 0, 204)'],  #purple
                 [0.15, 'rgb(204, 0, 204)'],  #purple
 
-                # Let values between 20-25% have color rgb(0, 0, 153)
+                # Let values between 20-25 have color rgb(0, 0, 153)
                 [0.15, 'rgb(0, 0, 153)'],    #blue
                 [0.2, 'rgb(0, 0, 153)'],    #blue
             
-                # Let values between 25-30% have color rgb(0, 0, 204)
+                # Let values between 25-30 have color rgb(0, 0, 204)
                 [0.2, 'rgb(0, 0, 204)'],    #blue
                 [0.25, 'rgb(0, 0, 204)'],    #blue
             
@@ -212,7 +212,7 @@ class densitygraph(object):
         #plotly.offline.plot(figure, filename = self._token + '/' + self._token + '_density.html')
 
 
-    def get_brain_figure(self, g, plot_title=''):
+    def get_brain_figure(self, g, plot_title='', resolution):
         """
         Returns the plotly figure object for vizualizing a 3d brain network.
         g: networkX object of brain
@@ -250,10 +250,20 @@ class densitygraph(object):
         for i in range(1, len(g.nodes()) + 1):
             Zlist.append(int((re.findall('\d+', str(attributes['s' + str(i)])))[2]))
         
+        # Set tupleResolution to resolution input parameter
+        tupleResolution = resolution;
+        
+        # EG: for Aut1367, the spacing is (0.01872, 0.01872, 0.005).
+    	xResolution = tupleResolution[0]
+    	yResolution = tupleResolution[1]
+    	zResolution = tupleResolution[2]
+    	# Now, to get the mm image size, we can multiply all x, y, z 
+    	# to get the proper mm size when plotting.
+
         # node style
-        node_trace = Scatter3d(x=Xlist,
-                               y=Ylist,
-                               z=Zlist,
+        node_trace = Scatter3d(x=Xlist * xResolution,
+                               y=Ylist * yResolution,
+                               z=Zlist * zResolution,
                                mode='markers',
                                # name='regions',
                                marker=Marker(symbol='dot',
