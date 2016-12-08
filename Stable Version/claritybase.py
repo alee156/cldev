@@ -57,8 +57,8 @@ class claritybase(object):
         #self.loadEqImg()
 
         # make a directory if none exists
-        if not os.path.exists(token):
-            os.makedirs(token)
+        if not os.path.exists('output/' + token):
+            os.makedirs('output/' + token)
 
     def getShape(self):
         """Function that returns the shape."""
@@ -138,7 +138,7 @@ class claritybase(object):
         """Generates the plotly from the csv file."""
         # Type in the path to your csv file here
         thedata = None
-        thedata = np.genfromtxt(self._token + '/' + self._token + 'localeq.csv',
+        thedata = np.genfromtxt('output/' + self._token + '/' + self._token + 'localeq.csv',
             delimiter=',', dtype='int', usecols = (0,1,2), names=['a','b','c'])
        
         trace1 = Scatter3d(
@@ -148,7 +148,7 @@ class claritybase(object):
             mode='markers',
             marker=dict(
                 size=1.2,
-                color='purple',                # set color to an array/list of desired values
+                color='cyan',                # set color to an array/list of desired values
                 colorscale='Viridis',   # choose a colorscale
                 opacity=0.15
             )
@@ -161,12 +161,14 @@ class claritybase(object):
                 r=0,
                 b=0,
                 t=0
-            )
+            ),
+            paper_bgcolor='rgb(0,0,0)',
+            plot_bgcolor='rgb(0,0,0)'
         )
 
         fig = Figure(data=data, layout=layout)
         print(self._token + "plotly")
-        plotly.offline.plot(fig, filename= self._token + "/" + self._token + "plotly.html")
+        plotly.offline.plot(fig, filename= 'output/' + self._token + "/" + self._token + "_brain_pointcloud.html")
 
     def applyLocalEq(self):
         """Applies local equilization to the img's histogram and outputs a .nii file"""
@@ -229,7 +231,7 @@ class claritybase(object):
 
         newer_img = localimgflat.reshape(x_value, y_value, z_value)
         localeq = nib.Nifti1Image(newer_img, np.eye(4))
-        nib.save(localeq, self._token + '/' + self._token + 'localeq.nii')
+        nib.save(localeq, 'output/' + self._token + '/' + self._token + 'localeq.nii')
 
 #    def loadImg(self, path=None, info=False):
 #        """Method for loading the .img file"""
@@ -281,7 +283,7 @@ class claritybase(object):
     def loadGeneratedNii(self, path=None, info=False):
         """Loads a preexisting nii file.  This function is mainly used for testing"""
         if path == None:
-            path = self._token + '/' + self._token + 'localeq.nii'
+            path = 'output/' + self._token + '/' + self._token + 'localeq.nii'
         
         print("Loading: %s"%(path))
 
@@ -324,6 +326,63 @@ class claritybase(object):
         print("File Loaded: %s"%(self._edgefile.name))
         return self
 
+    def calculatePointsByNumber(self, num_points = 10000, optimize = True):
+        """Method to extract points data from the img file."""
+        if self._img is None:
+            raise ValueError("Img haven't loaded, please call loadImg() first.")
+
+        threshold = .9
+        total = self._shape[0]*self._shape[1]*self._shape[2]
+        print("Coverting to points...\ntoken=%s\ntotal=%d\nmax=%f\nthreshold=%f\nnum_points=%d" \
+              %(self._token,total,self._max,threshold,num_points))
+        print("(This will take couple minutes)")
+        # threshold
+        filt = self._img > threshold * self._max
+        # a is just a container to hold another value for ValueError: too many values to unpack
+        #x, y, z, a = np.where(filt)
+        t = np.where(filt)
+        x = t[0]
+        y = t[1]
+        z = t[2]
+        v = self._img[filt]
+        if optimize:
+            self.discardImg()
+        v = np.int16(255 * (np.float32(v) / np.float32(self._max)))
+        l = v.shape
+        print("Above threshold=%d"%(l))
+        # sample
+
+        total_points = l[0]
+        print('total points:')
+        print(total_points)
+        if not 0 <= num_points <= total_points:
+            raise ValueError("Number of points given should be at most equal to total points: %d" % total_points)
+        fraction = num_points / float(total_points)
+
+        if fraction < 1.0:
+            # np.random.random returns random floats in the half-open interval [0.0, 1.0)
+            filt = np.random.random(size=l) < fraction
+            print('v.shape:')
+            print(l)
+            print('x.size before filter: %d' % x.size)
+            print('y.size before filter: %d' % y.size)
+            print('z.size before filter: %d' % z.size)
+            print('v.size before filter: %d' % v.size)
+            x = x[filt]
+            y = y[filt]
+            z = z[filt]
+            v = v[filt]
+            print('x.size after filter: %d' % x.size)
+            print('y.size after filter: %d' % y.size)
+            print('z.size after filter: %d' % z.size)
+            print('v.size after filter: %d' % v.size)
+        self._points = np.vstack([x,y,z,v])
+        self._points = np.transpose(self._points)
+        print("Samples=%d"%(self._points.shape[0]))
+        print("Finished")
+        return self
+
+
     def calculatePoints(self, threshold=0.1, sample=0.5, optimize=True):
         """Method to extract points data from the img file."""
         if not 0 <= threshold < 1:
@@ -348,16 +407,27 @@ class claritybase(object):
         v = self._img[filt]
         if optimize:
             self.discardImg()
-        v = np.int16(255*(np.float32(v)/np.float32(self._max)))
+        v = np.int16(255 * (np.float32(v) / np.float32(self._max)))
         l = v.shape
         print("Above threshold=%d"%(l))
         # sample
         if sample < 1.0:
+            # np.random.random returns random floats in the half-open interval [0.0, 1.0)
             filt = np.random.random(size=l) < sample
+            print('v.shape:')
+            print(l)
+            print('x.size before filter: %d' % x.size)
+            print('y.size before filter: %d' % y.size)
+            print('z.size before filter: %d' % z.size)
+            print('v.size before filter: %d' % v.size)
             x = x[filt]
             y = y[filt]
             z = z[filt]
             v = v[filt]
+            print('x.size after filter: %d' % x.size)
+            print('y.size after filter: %d' % y.size)
+            print('z.size after filter: %d' % z.size)
+            print('v.size after filter: %d' % v.size)
         self._points = np.vstack([x,y,z,v])
         self._points = np.transpose(self._points)
         print("Samples=%d"%(self._points.shape[0]))
@@ -370,7 +440,9 @@ class claritybase(object):
             self._points = points
         if self._points is None:
             raise ValueError("Points is empty, please call imgToPoints() first.")
-        pathname = self._token + "/" + self._token+"localeq.csv"
+        print('self._token asdfasdf:')
+        print(self._token)
+        pathname = 'output/' + self._token + "/" + self._token+"localeq.csv"
         np.savetxt(pathname,self._points,fmt='%d',delimiter=',')
         return self
 
@@ -389,7 +461,7 @@ class claritybase(object):
         
         # points is an array of arrays
         points = self._points
-        outpath = self._token + '/'
+        outpath = 'output/' + self._token + '/'
         nodename = outpath + filename + '.nodes.csv'
         edgename = outpath + filename + '.edges.csv'
 
@@ -407,6 +479,7 @@ class claritybase(object):
                     z = temp[2]
                     v = temp[3]
                     # radius = 18
+                    radius = 25
                     nodefile.write("s" + str(ind + 1) + "," + str(x) + "," + str(y) + "," + str(z) + "\n")
                     for index in range(ind + 1, len(points)):
                         tmp = points[index]
@@ -421,12 +494,14 @@ class claritybase(object):
         nodefile = None
         edgefile = None
 
+        path = 'output/' + self._token
+
         # If no nodefilename was entered, used the Clarity object's nodefile
         if nodefilename == None: 
             #nodefile = self._nodefile
             #nodefile = open(self._nodefile, 'r')
             
-            self.loadNodeCsv(self._token + "/" + self._token + ".nodes.csv")
+            self.loadNodeCsv(path + "/" + self._token + ".nodes.csv")
             nodefile = self._nodefile
         else:
             self.loadNodeCsv(nodefilename)
@@ -437,14 +512,14 @@ class claritybase(object):
             #edgefile = self._edgefile
             #edgefile = open(self._edgefile, 'r')
             
-            self.loadEdgeCsv(self._token + "/" + self._token + ".edges.csv")
+            self.loadEdgeCsv(path + "/" + self._token + ".edges.csv")
             edgefile = self._edgefile
         else:
             self.loadEdgeCsv(edgefilename)
             edgefile = self._edgefile
 
         # Start writing to the output graphml file
-        path = self._token + "/" + self._token + ".graphml"
+        path = path + "/" + self._token + ".graphml"
         with open(path, 'w') as outfile:
             outfile.write("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")
             outfile.write("<graphml xmlns=\"http://graphml.graphdrawing.org/xmlns\"\n")
@@ -483,7 +558,7 @@ class claritybase(object):
         print('generating plotly with edges...')
         if path == None:
             # If bath is not specified use the default path to the generated folder.
-            path = self._token + '/' + self._token + '.graphml'           
+            path = 'output/' + self._token + '/' + self._token + '.graphml'
 
         g = nx.read_graphml(path)
 
@@ -553,7 +628,7 @@ class claritybase(object):
 
         data = Data([node_trace, edge_trace])
         fig = Figure(data=data, layout=layout)
-        plotly.offline.plot(fig, filename= self._token + "/" + self._token + "_edges_graphml.html")
+        plotly.offline.plot(fig, filename= 'output/' + self._token + "/" + self._token + "_edge_count_pointcloud.html")
 
         #return fig 
 

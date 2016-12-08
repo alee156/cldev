@@ -8,16 +8,15 @@ from cherrypy.lib.static import serve_file
 import shutil
 import tempfile
 import glob
-import random
 
-from clarityviz import claritybase
-from clarityviz import densitygraph as dg
-from clarityviz import atlasregiongraph as arg
+from clarityviz import claritybase, densitygraph, atlasregiongraph
+# from clarityviz import densitygraph as dg
+# from clarityviz import atlasregiongraph as arg
 import networkx as nx
 import plotly
 
-# import matplotlib
-# import matplotlib.pyplot as plt
+import matplotlib
+import matplotlib.pyplot as plt
 from ndreg import *
 import ndio.remote.neurodata as neurodata
 import nibabel as nb
@@ -26,6 +25,10 @@ from numpy import genfromtxt
 localDir = os.path.dirname(__file__)
 absDir = os.path.join(os.getcwd(), localDir)
 # print absDir
+
+def testFunction(input):
+    print('TEST FUNCTION:')
+    print(input)
 
 def imgGet(inToken):
     refToken = "ara_ccf2"                         # hardcoded 'ara_ccf2' atlas until additional functionality is requested
@@ -38,33 +41,11 @@ def imgGet(inToken):
     counts = np.bincount(values)
     maximum = np.argmax(counts)
 
-    tupleResolution = inImg.GetSpacing();         # spacing here used to scale images to mm size (anisotropic resolution)
-
     lowerThreshold = maximum
     upperThreshold = sitk.GetArrayFromImage(inImg).max()+1
 
     inImg = sitk.Threshold(inImg,lowerThreshold,upperThreshold,lowerThreshold) - lowerThreshold
     print "applied filtering"
-    rawImg = sitk.GetArrayFromImage(inImg)
-    xdimensions = len(rawImg[:,0,0])
-    ydimensions = len(rawImg[0,:,0])
-    zdimensions = len(rawImg[0,0,:])
-    xyz = []
-    for i in range(40000):
-        value = 0
-        while(value == 0):
-            xval = random.sample(xrange(0,xdimensions), 1)[0]
-            yval = random.sample(xrange(0,ydimensions), 1)[0]
-            zval = random.sample(xrange(0,zdimensions), 1)[0]
-            value = rawImg[xval,yval,zval]
-            if [xval, yval, zval] not in xyz and value > 300:
-                xyz.append([xval, yval, zval])
-            else:
-                value = 0
-    rImg = claritybase.claritybase(inToken + 'raw', None)
-    rImg.savePoints(None,xyz)
-    rImg.generate_plotly_html()
-    print "random sample of points above 250"
     spacingImg = inImg.GetSpacing()
     spacing = tuple(i * 50 for i in spacingImg)
     inImg.SetSpacing(spacingImg)
@@ -102,7 +83,7 @@ def imgGet(inToken):
 
 def image_parse(inToken):
     imgName = imgGet(inToken)
-    # imgName = inToken + 'reorient_atlas'
+    # imgName = str(inToken) + "reorient_atlas"
     copydir = os.path.join(os.getcwd(), os.path.dirname('img/'))
     img = claritybase.claritybase(imgName, copydir)       # initial call for clarityviz
     print "loaded into claritybase"
@@ -114,9 +95,8 @@ def image_parse(inToken):
     print "loaded generated nii"
     img.calculatePoints(threshold = 0.9, sample = 0.05)
     print "calculating points"
-    img.brightPoints(None,40000)
+    img.brightPoints()
     print "saving brightest points to csv"
-    # img.savePoints()
     img.generate_plotly_html()
     print "generating plotly"
     img.plot3d()
@@ -124,17 +104,16 @@ def image_parse(inToken):
     img.graphmlconvert()
     print "generating graphml"
     img.get_brain_figure(None, imgName + ' edgecount')
-    print "generating density graph"
-    
+
     return imgName
 
-def density_graph(Token, tupleResolution):
+def density_graph(Token):
     densg = dg.densitygraph(Token)
     print 'densitygraph module'
     densg.generate_density_graph()
     print 'generated density graph'
     g = nx.read_graphml(Token + '/' + Token + '.graphml')
-    ggraph = densg.get_brain_figure(g = g, plot_title=Token, resolution=tupleResolution)
+    ggraph = densg.get_brain_figure(g = g, plot_title=Token)
     plotly.offline.plot(ggraph, filename = Token + '/' + Token + '_brain_figure.html')
     hm = densg.generate_heat_map()
     plotly.offline.plot(hm, filename = Token + '/' + Token + '_brain_heatmap.html')
@@ -144,7 +123,7 @@ def atlas_region(Token):
     atlas = nb.load(atlas_img)	# <- atlas .nii image
     atlas_data = atlas.get_data()
 
-    csvfile = Token + '/' + Token + 'localeq.csv' # 'atlasexp/Control258localeq.csv'	# <- regular csv from the .nii to csv step
+    csvfile = Token + '/' + Token + '.csv' # 'atlasexp/Control258localeq.csv'	# <- regular csv from the .nii to csv step
 
     bright_points = genfromtxt(csvfile, delimiter=',')
 
@@ -170,7 +149,7 @@ def atlas_region(Token):
     newToken = Token + '.region'
     atlas = arg.atlasregiongraph(newToken, Token)
     
-    atlas.generate_atlas_region_graph(None, numRegions, resolution)
+    atlas.generate_atlas_region_graph(None, numRegions)
 
 
 class FileDemo(object):
@@ -203,6 +182,8 @@ class FileDemo(object):
             <link href="static/css/creative.min.css" rel="stylesheet">
             <!-- Custom styles for this template -->
             <link href="static/css/style.css" rel="stylesheet">
+            <!-- Dropzone CSS -->
+            <link href="static/css/dropzone.css" rel="stylesheet">
             <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
             <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
             <!--[if lt IE 9]>
@@ -250,16 +231,21 @@ class FileDemo(object):
                         <div class="row">
                             <div class="col-xs-6 col-md-4"></div>
                             <div class="col-xs-6 col-md-4">
-                                <form action="upload" method="post" enctype="multipart/form-data">
+                                <label for="myFile">Upload a File</label>
+                                <form action="/file-upload" class="dropzone" method="post" enctype="multipart/form-data" id="myFile">
+                                </form>
+                                <input class="btn btn-default" type="submit" value="Submit">
+
+                                <!-- <form action="upload" method="post" enctype="multipart/form-data">
                                     <div class="form-group">
                                         <label for="myFile">Upload a File</label>
                                         <div class="center-block"></div>
                                         <input type="file" class="form-control" id="myFile" name="myFile">
-                                        <!-- <p class="help-block">Example block-level help text here.</p> -->
+                                        <p class="help-block">Example block-level help text here.</p>
                                     </div>
-                                    <!-- filename: <input type="file" name="myFile" /><br /> -->
+                                    filename: <input type="file" name="myFile" /><br />
                                     <input class="btn btn-default" type="submit" value="Submit">
-                                </form>
+                                </form> -->
                                 <h2>OR</h2>
                                 <form action="neurodata" method="post" enctype="multipart/form-data">
                                     <div class="form-group">
@@ -307,15 +293,17 @@ class FileDemo(object):
                 </div>
             </section>
             <!-- jQuery -->
-            <script src="vendor/jquery/jquery.min.js"></script>
+            <script src="static/vendor/jquery/jquery.min.js"></script>
             <!-- Bootstrap Core JavaScript -->
-            <script src="vendor/bootstrap/js/bootstrap.min.js"></script>
+            <script src="static/vendor/bootstrap/js/bootstrap.min.js"></script>
             <!-- Plugin JavaScript -->
             <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-easing/1.3/jquery.easing.min.js"></script>
-            <script src="vendor/scrollreveal/scrollreveal.min.js"></script>
-            <script src="vendor/magnific-popup/jquery.magnific-popup.min.js"></script>
+            <script src="static/vendor/scrollreveal/scrollreveal.min.js"></script>
+            <script src="static/vendor/magnific-popup/jquery.magnific-popup.min.js"></script>
             <!-- Theme JavaScript -->
-            <script src="js/creative.min.js"></script>
+            <script src="static/js/creative.min.js"></script>
+            <!-- JavaScript for the drag and drop upload box. -->
+            <script src="static/js/dropzone.js"></script>
         </body>
         </html>
 
