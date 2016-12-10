@@ -549,13 +549,24 @@ class claritybase(object):
 
             outfile.write("  </graph>\n</graphml>")
 
-    def get_brain_figure(self, path = None, plot_title=''):
+    def get_brain_figure(self, resolution, path = None, plot_title=''):
         """
         Returns the plotly figure object for vizualizing a 3d brain network.
 
         g: networkX object of brain
         """
         print('generating plotly with edges...')
+
+        # Set tupleResolution to resolution input parameter
+        tupleResolution = resolution;
+
+        # EG: for Aut1367, the spacing is (0.01872, 0.01872, 0.005).
+        xResolution = tupleResolution[0]
+        yResolution = tupleResolution[1]
+        zResolution = tupleResolution[2]
+        # Now, to get the mm image size, we can multiply all x, y, z
+        # to get the proper mm size when plotting.
+
         if path == None:
             # If bath is not specified use the default path to the generated folder.
             path = 'output/' + self._token + '/' + self._token + '.graphml'
@@ -580,14 +591,14 @@ class claritybase(object):
             source_pos = node_positions_3d.loc[e[0]]
             target_pos = node_positions_3d.loc[e[1]]
         
-            edge_x += [source_pos['x'], target_pos['x'], None]
-            edge_y += [source_pos['y'], target_pos['y'], None]
-            edge_z += [source_pos['z'], target_pos['z'], None]
+            edge_x += [x * xResolution for x in source_pos['x'], x * xResolution for x in target_pos['x'], None]
+            edge_y += [y * yResolution for y in source_pos['y'], y * yResolution for y in target_pos['y'], None]
+            edge_z += [z * zResolution for z in source_pos['z'], z * zResolution for z in target_pos['z'], None]
 
         # node style
-        node_trace = Scatter3d(x=node_positions_3d['x'],
-                               y=node_positions_3d['y'],
-                               z=node_positions_3d['z'],
+        node_trace = Scatter3d(x=[x * xResolution for x in node_positions_3d['x']],
+                               y=[x * yResolution for x in node_positions_3d['y']],
+                               z=[x * zResolution for x in node_positions_3d['z']],
                                mode='markers',
                                # name='regions',
                                marker=Marker(symbol='dot',

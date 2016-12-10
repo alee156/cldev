@@ -103,7 +103,7 @@ def image_parse(inToken):
     print "generating nodes and edges list"
     img.graphmlconvert()
     print "generating graphml"
-    img.get_brain_figure(None, imgName + ' edgecount')
+    img.get_brain_figure(None, imgName + ' edgecount', resolution = tupleResolution)
 
     return imgName
 
